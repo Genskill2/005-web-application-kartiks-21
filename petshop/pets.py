@@ -18,19 +18,27 @@ def format_date(d):
 
 @bp.route("/search/<field>/<value>")
 def search(field, value):
-    # TBD
-    return ""
+    conn = db.get_db()
+    cursor = conn.cursor()
+    oby = request.args.get("order_by", "id")
+    order = request.args.get("order", "asc")
+    if order == "asc":
+        cursor.execute("select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s, tags_pets tp, tag t where t.name = ? and tp.tag = t.id and p.id=tp.pet and p.species = s.id order by p."+oby, [value])
+    else:
+        cursor.execute("select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s, tags_pets tp, tag t where t.name = ? and tp.tag = t.id and p.id=tp.pet and p.species = s.id order by p."+oby+" desc",[value])
+    pets = cursor.fetchall()
+    return render_template('search.html', field = field, value = value, pets = pets, order="desc" if order=="asc" else "asc")
 
 @bp.route("/")
 def dashboard():
     conn = db.get_db()
     cursor = conn.cursor()
-    oby = request.args.get("order_by", "id") # TODO. This is currently not used. 
+    oby = request.args.get("order_by", "id") 
     order = request.args.get("order", "asc")
     if order == "asc":
-        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.id")
+        cursor.execute("select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p."+oby)
     else:
-        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.id desc")
+        cursor.execute("select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p."+oby+" desc")
     pets = cursor.fetchall()
     return render_template('index.html', pets = pets, order="desc" if order=="asc" else "asc")
 
@@ -74,10 +82,14 @@ def edit(pid):
     elif request.method == "POST":
         description = request.form.get('description')
         sold = request.form.get("sold")
+        cursor.execute("select p.sold from pet p where p.id = ?", [pid])
+        date = cursor.fetchone()[0]
+        cursor.execute("UPDATE pet SET description = ? where id = ?", [description,pid])
+        was_sold = (date != '')
+        if(was_sold and sold == None):
+           cursor.execute("UPDATE pet SET sold = \"\" where id = ?", [pid])
+        elif(not was_sold and sold):
+             cursor.execute("UPDATE pet SET sold = ? where id = ?", [datetime.date.today(),pid])
+        conn.commit()
         # TODO Handle sold
         return redirect(url_for("pets.pet_info", pid=pid), 302)
-        
-    
-
-
-
